@@ -1,0 +1,52 @@
+name: trading signals
+
+on:
+  schedule:
+    # times are UTC; one run for New York summer time (edt) and one for winter time (est),
+    # the bot itself exits immediately in the slot that is not active
+    - cron: "40 4 * * 1-5"   # gold, summer  (01:00 New York = 05:00 UTC)
+    - cron: "40 5 * * 1-5"   # gold, winter  (01:00 New York = 06:00 UTC)
+    - cron: "15 13 * * 1-5"  # nas,  summer  (09:35 New York = 13:35 UTC)
+    - cron: "15 14 * * 1-5"  # nas,  winter  (09:35 New York = 14:35 UTC)
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "ping / gold / nas"
+        default: ping
+      test_day:
+        description: "optional YYYY-MM-DD to replay a past day (prints only)"
+        default: ""
+
+concurrency:
+  group: signals-${{ github.event.schedule || github.run_id }}
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RISK_USD: ${{ vars.RISK_USD }}
+          MAX_MICROS: ${{ vars.MAX_MICROS }}
+        run: |
+          case "${{ github.event.schedule }}" in
+            "40 4 * * 1-5")  python signal_bot.py gold --slot edt ;;
+            "40 5 * * 1-5")  python signal_bot.py gold --slot est ;;
+            "15 13 * * 1-5") python signal_bot.py nas --slot edt ;;
+            "15 14 * * 1-5") python signal_bot.py nas --slot est ;;
+            *)
+              if [ -n "${{ inputs.test_day }}" ]; then
+                python signal_bot.py "${{ inputs.job }}" --test "${{ inputs.test_day }}"
+              else
+                python signal_bot.py "${{ inputs.job }}"
+              fi ;;
+          esac
