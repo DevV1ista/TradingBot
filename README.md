@@ -1,33 +1,44 @@
-# Trading signals: XAUUSD + NASDAQ (free, GitHub Actions + Telegram)
+# Trading signals: XAUUSD + NASDAQ for FTMO (free, GitHub Actions + Telegram)
 
-`watcher.py` runs every trading day in 3 GitHub Actions segments (about 06:50 – 22:05 Swiss time).
+`watcher.py` runs every trading day in 3 GitHub Actions segments (about 06:50 – 22:05 Swiss time) and
+tracks a simulated FTMO account that follows every signal exactly.
 
-## Strategy (GitHub variable `STRATEGY`)
-| Value | Winners | Idea | Backtest Nov 2023 – Nov 2026 (Lucid 50K, $300 per trade) |
-|---|---|---|---|
-| `balanced` (**default**) | ~60 % | XAUUSD London breakout + NASDAQ strong first 5-min candle; TP 0.25×ATR, SL 0.3×ATR | +$18,000, evaluation passed 65 % / failed 30 % |
-| `hw` | ~70 % | same entries; TP 0.15×ATR, SL 0.3×ATR | +$8,600, passed 38 % / failed 51 % |
-| `classic` | ~40 % | London breakout TP 4R, ORB5 TP 3R (biggest wins) | highest profit per risk, long losing streaks |
+## Setup (GitHub → Settings → Secrets and variables → Actions)
+- Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- Variables (all optional):
 
-Higher win rates mean smaller targets, so trading costs eat most of the profit (see TradingLab/research_hw.py).
+| Variable | Default | Meaning |
+|---|---|---|
+| `BROKER` | `ftmo` | `ftmo` = CFD prices + lots + FTMO tracking · `lucid` = futures + micros |
+| `STRATEGY` | `classic` | `classic` (~40 % winners, big wins) · `balanced` (~60 %) · `hw` (~70 %) |
+| `ACCOUNT_SIZE` | `100000` | FTMO account size |
+| `RISK_PCT` | `0.5` | risk per trade in % of the account |
+| `LOT_USD_XAU` | `100` | $ per $1 gold move per lot (FTMO XAUUSD: 100 oz) |
+| `LOT_USD_US100` | `1` | $ per index point per lot. **Check US100.cash → Specification in MT5** |
 
 ## Messages
-- ~07:00 **XAUUSD OCO order**: BUY STOP and SELL STOP, each with TP / SL / quantity, separated by lines.
-  If neither fills by 14:00, delete both. Close an open position by 20:00 at the latest.
-- ⚠️ **GLEICH** when the price is about $3 away from a level, then 🟢/🔴 **ausgelöst** when it fills.
-- ~15:34 🔮 NASDAQ prediction, ~15:35 🟢/🔴 **JETZT** with TP/SL prices and points.
-- ✅ TP / ❌ SL with the $ result on Lucid 50K; ⏰ close reminders; 📊 daily balance with hit rate.
+- ~07:00 **XAUUSD OCO order** (BUY STOP / SELL STOP with TP, SL, lots); ⚠️ **GLEICH** about $3 before a level; 🟢/🔴 **ausgelöst**.
+- ~15:34 🔮 NASDAQ prediction (only when the candle is already clear); ~15:35 🟢/🔴 **JETZT**.
+  No trade when QQQ and the Nasdaq-100 index disagree: such a near-flat first candle is a coin flip.
+- ✅ TP / ❌ SL / ⏹ time exit, each with the result and the FTMO account block:
+  account number, phase, balance before → after, distance to the target, loss limit, and payout status.
+- 22:00 📊 daily balance: today, account status, all-time trades / hit rate / payouts / fees.
 
-Prices are the Lucid futures prices (MGC for XAUUSD, MNQ for NASDAQ). "Menge" is the number of micro contracts.
+### Account tracking rules (FTMO 2-step)
+- Phase 1: +10 %. Phase 2: +5 %. Both need at least 4 trading days.
+- Max daily loss: 5 %. Max loss: 10 % of the start balance.
+- Funded: a payout is possible 14 days after the start or after the last payout. You get 80 % of the profit, and the first payout also refunds the fee.
+- Phase changes, new accounts and payouts take effect at the daily summary.
+- The bot assumes you request every possible payout and buy a new challenge after a loss.
+- To restart the tracking, delete `state/account.json`.
 
-## Data (free)
-- QQQ in real time × ratio to NQ futures. Measured error: about 1.6 points.
-- Coinbase PAXG in real time + basis to MGC. Measured error: about $1.
+## Data (free, real-time)
+- NASDAQ: QQQ 1-min × ratio to the Nasdaq-100 index (^NDX). Measured error: about 2 points.
+- XAUUSD: Coinbase PAXG 1-min + basis to the Swissquote spot quote. Measured error: about $1.
 
-Yahoo futures data is 10 min delayed, so it is only used for the conversion. Your broker fills the orders at the exact levels.
+Your broker fills the orders at the exact levels; the alerts are informational.
 
-## Setup
-- Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-- Variables (optional): `STRATEGY`, `RISK_USD` (default 300), `MAX_MICROS` (default 10).
-- The repository is public, which gives unlimited free Action minutes.
-- Test: Actions → Run workflow → `ping`, or `replay` + date (the whole simulated day appears in the log).
+## Test
+Actions → trading signals → Run workflow:
+- `ping` sends a Telegram test message.
+- `replay` + date simulates a past day; the output appears in the log.

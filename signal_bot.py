@@ -225,7 +225,13 @@ if __name__ == "__main__":
     if not td and a.job != "ping" and not right_slot(a.slot):
         sys.exit(0)
     if a.job == "ping":
-        send(f"✅ Signal-Bot verbunden. Strategie: {os.getenv("STRATEGY") or "balanced"} · Risiko pro Trade ${RISK:.0f}. XAUUSD-Order ~07:00, NASDAQ ~15:35 (CH), dazu Vorwarnungen, TP/SL-Meldungen und Schliess-Erinnerungen.")
+        b = (os.getenv("BROKER") or "ftmo").lower()
+        if b == "ftmo":
+            acc = float(os.getenv("ACCOUNT_SIZE") or 100000); pct = float(os.getenv("RISK_PCT") or 0.5)
+            send(f"✅ Signal-Bot verbunden · FTMO {acc/1000:.0f}K · Strategie {os.getenv('STRATEGY') or 'classic'} · "
+                 f"Risiko {pct} % (${acc*pct/100:,.0f}) pro Trade. XAUUSD-Order ~07:00, NASDAQ ~15:35 (CH).")
+        else:
+            send(f"✅ Signal-Bot verbunden · Lucid · Strategie {os.getenv('STRATEGY') or 'balanced'} · Risiko ${RISK:.0f} pro Trade.")
     elif a.job == "gold":
         gold(td)
     else:
