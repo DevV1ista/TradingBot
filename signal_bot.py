@@ -33,7 +33,7 @@ NY = ZoneInfo("America/New_York")
 CH = ZoneInfo("Europe/Zurich")
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 RISK = float(os.getenv("RISK_USD") or "400")
-MAX_MICROS = int(os.getenv("MAX_MICROS", "10"))
+MAX_MICROS = int(os.getenv("MAX_MICROS") or "10")
 
 
 # ----------------------------------------------------------------------------------- helpers
