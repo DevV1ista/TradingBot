@@ -56,6 +56,27 @@ LINE = "━━━━━━━━━━━━━━━"
 STATE_DIR = Path(__file__).parent / "state"
 SEGMENTS = {1: ((0, 50), (5, 40)), 2: ((5, 40), (11, 0)), 3: ((11, 0), (16, 5))}  # New York time, each < 6 h
 
+# US market calendar (NYSE): closed days, 13:00 early closes. Gold (CME) also closes early on US
+# holidays and is closed on Christmas / New Year / Good Friday.
+US_CLOSED = {date.fromisoformat(d) for d in (
+    "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31",
+    "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24")}
+US_EARLY = {date.fromisoformat(d) for d in ("2026-11-27", "2026-12-24", "2027-11-26")}
+GOLD_CLOSED = {date.fromisoformat(d) for d in ("2026-12-25", "2027-01-01", "2027-03-26", "2027-12-24")}
+
+
+def gold_end(day):
+    return (13, 0) if day in US_CLOSED or day in US_EARLY else (14, 0)
+
+
+def nas_end(day):
+    return (12, 55) if day in US_EARLY else (15, 59)
+
+
+def minus10(t):
+    m = t[0] * 60 + t[1] - 10
+    return (m // 60, m % 60)
+
 
 def usd(x):
     return f"{'+' if x >= 0 else '−'}${abs(x):,.0f}".replace(",", "'")
@@ -454,6 +475,7 @@ class Bot:
         self.path = self.dir / f"{day}.json"
         self.s = json.loads(self.path.read_text()) if self.path.exists() else {"gold": {}, "nas": {}, "sent": []}
         self.acct = Account(self.dir / "account.json") if FTMO else None
+        self.ge, self.ne = gold_end(day), nas_end(day)
 
     def save(self):
         self.path.parent.mkdir(exist_ok=True)
@@ -521,7 +543,7 @@ class Bot:
         (nb, ub), (ns, us) = size(rb, "gold"), size(rs, "gold")
         legs = {"long": {"entry": hi, "sl": hi - rb, "tp": hi + tb, "n": nb, "upp": ub, "r": rb, "t": tb},
                 "short": {"entry": lo, "sl": lo + rs, "tp": lo - ts, "n": ns, "upp": us, "r": rs, "t": ts}}
-        eh, em = P["g_entry_end"]
+        eh, em = min(P["g_entry_end"], self.ge)
         self.s["gold"] = {"status": "pending", "legs": legs, "checked": hi_t.isoformat(), "alerted": [], "atr": atr}
         if not nb and not ns:
             self.s["gold"]["status"] = "off"
@@ -537,10 +559,11 @@ class Bot:
         msg = (f"🟡 XAUUSD {self.day:%d.%m.}\n<b>OCO-ORDER: BEIDE ORDERS SETZEN</b>\n(wird eine ausgelöst, wird die andere gelöscht)\n"
                f"{LINE}\n{leg('long', legs['long'])}\n{LINE}\n{leg('short', legs['short'])}\n{LINE}\n"
                f"Gewinn bei TP ca. {usd(L['t']*L['upp'])}  ·  Verlust bei SL ca. {usd(-L['r']*L['upp'])}\n"
-               + (f"Bis {ch(self.day, 14, 0)} Uhr: nicht ausgelöste Order löschen bzw. offene Position schliessen"
-                  if (eh, em) == (14, 0) else
+               + (f"Bis {ch(self.day, *self.ge)} Uhr: nicht ausgelöste Order löschen bzw. offene Position schliessen"
+                  + (" (US-Feiertag: früher Schluss)" if self.ge != (14, 0) else "")
+                  if (eh, em) == self.ge else
                   f"Nicht ausgelöst bis {ch(self.day, eh, em)} Uhr → beide löschen\n"
-                  f"Offene Position spätestens {ch(self.day, 14, 0)} Uhr schliessen"))
+                  f"Offene Position spätestens {ch(self.day, *self.ge)} Uhr schliessen"))
         self.once("gold_setup", msg)
 
     def gold_watch(self):
@@ -550,8 +573,8 @@ class Bot:
         est, _ = gold_bars(self.data)
         if est is None or est.empty:
             return
-        eh, em = P["g_entry_end"]
-        entry_end, end = ny_time(self.day, eh, em), ny_time(self.day, 14, 0)
+        eh, em = min(P["g_entry_end"], self.ge)
+        entry_end, end = ny_time(self.day, eh, em), ny_time(self.day, *self.ge)
         checked = datetime.fromisoformat(g["checked"])
         price = float(est["close"].iloc[-1])
         for t, b in est[(est.index >= checked) & (est.index < end)].iterrows():
@@ -595,9 +618,9 @@ class Bot:
         if g["status"] in ("long", "short"):
             leg, sg = g["legs"][g["status"]], 1 if g["status"] == "long" else -1
             now_pnl = (price - leg["entry"]) * sg * leg["upp"]
-            if self.after(13, 50):
-                self.once("gold_rem", f"⏰ XAUUSD in 10 Min schliessen ({ch(self.day, 14, 0)} Uhr)\naktuell ca. {usd(now_pnl)}")
-            if self.after(14, 0):
+            if self.after(*minus10(self.ge)):
+                self.once("gold_rem", f"⏰ XAUUSD in 10 Min schliessen ({ch(self.day, *self.ge)} Uhr)\naktuell ca. {usd(now_pnl)}")
+            if self.after(*self.ge):
                 g |= {"status": "closed", "pnl": now_pnl}
                 self.save()
                 if "gold_exit" not in self.s["sent"]:
@@ -664,13 +687,14 @@ class Bot:
             self.s["nas"] = L | {"status": "open", "checked": ny_time(self.day, 9, 35).isoformat()}
             flip = "\n⚠️ Achtung: andere Richtung als vorhergesagt!" if self.s.get("nas_pred") not in (None, L["side"]) else ""
             self.once("nas_signal", f"{'🟢' if L['side'] > 0 else '🔴'} <b>JETZT:</b> {self.nas_text(L)}{flip}\n"
-                                    f"Spätestens {ch(self.day, 15, 59)} Uhr schliessen")
+                                    f"Spätestens {ch(self.day, *self.ne)} Uhr schliessen"
+                                    + (" (US-Börse schliesst heute früher!)" if self.ne != (15, 59) else ""))
         if n.get("status") == "open":
             bars = nas_bars(self.data)
             if bars is None or bars.empty:
                 return
             price = float(bars["close"].iloc[-1])
-            for t, b in bars[(bars.index >= datetime.fromisoformat(n["checked"])) & (bars.index < ny_time(self.day, 15, 59))].iterrows():
+            for t, b in bars[(bars.index >= datetime.fromisoformat(n["checked"])) & (bars.index < ny_time(self.day, *self.ne))].iterrows():
                 s = n["side"]
                 hit_sl = b["low"] <= n["sl"] if s > 0 else b["high"] >= n["sl"]
                 hit_tp = b["high"] >= n["tp"] if s > 0 else b["low"] <= n["tp"]
@@ -685,9 +709,9 @@ class Bot:
                 n["checked"] = (t + timedelta(minutes=1)).isoformat()
             if n["status"] == "open":
                 now_pnl = (price - n["entry"]) * n["side"] * n["upp"]
-                if self.after(15, 50):
-                    self.once("nas_rem", f"⏰ NASDAQ in 10 Min schliessen ({ch(self.day, 15, 59)} Uhr) – Markt schliesst\naktuell ca. {usd(now_pnl)}")
-                if self.after(15, 59):
+                if self.after(*minus10(self.ne)):
+                    self.once("nas_rem", f"⏰ NASDAQ in 10 Min schliessen ({ch(self.day, *self.ne)} Uhr) – Markt schliesst\naktuell ca. {usd(now_pnl)}")
+                if self.after(*self.ne):
                     n |= {"status": "closed", "pnl": now_pnl}
                     self.save()
                     if "nas_exit" not in self.s["sent"]:
@@ -722,9 +746,17 @@ class Bot:
     def tick(self):
         if self.day.weekday() >= 5:
             return
+        if self.day in GOLD_CLOSED:
+            self.once("closed", f"🎄 {self.day:%d.%m.}: Märkte geschlossen (Feiertag) – heute keine Signale")
+            return
         self.gold_setup()
         self.gold_watch()
-        self.nas()
+        if self.day in US_CLOSED:
+            if self.after(9, 30):
+                self.s["nas"] = self.s["nas"] or {"status": "off"}
+                self.once("nas_none", f"⚪ NASDAQ {self.day:%d.%m.}: US-Börse geschlossen (Feiertag) – kein Trade")
+        else:
+            self.nas()
         self.summary()
 
 
