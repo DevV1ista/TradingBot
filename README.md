@@ -1,23 +1,29 @@
 # Trading signals (free, GitHub Actions + Telegram)
 
-GitHub runs `signal_bot.py` on schedule. You need no PC and no server.
+`watcher.py` runs every trading day in 3 GitHub Actions segments, from 06:50 to 22:05 Swiss time. It sends:
 
-| Signal | Swiss time | What you do |
-|---|---|---|
-| Gold London breakout | ~07:00 | place the BUY STOP and SELL STOP (1 MGC each) with SL/TP as OCO; at 20:00 cancel what is left and close |
-| NAS ORB5 | ~15:35 | market order MNQ with SL/TP in ticks as sent; close at 21:59 if still open |
+| When (CH) | Message |
+|---|---|
+| ~07:00 | 🟡 **GOLD OCO order**: BUY STOP and SELL STOP with TP/SL, separated by lines |
+| any time | ⚠️ **GLEICH LONG/SHORT**: price is close to a gold level, get ready |
+| any time | 🟢/🔴 **ausgelöst**: the gold order filled |
+| ~15:34 | 🔮 **NAS prediction**: the first candle is still forming |
+| ~15:35 | 🟢/🔴 **LONG/SHORT JETZT**: market order MNQ, TP/SL in points + ticks |
+| any time | ✅ TP / ❌ SL hit, with the $ result on a Lucid 50K account |
+| 19:50 / 21:50 | ⏰ close reminders; 20:00 / 21:59 close now |
+| 22:00 | 📊 daily balance + running total |
 
-(The Swiss times shift by 1 hour in the weeks when US and EU daylight-saving dates differ; each message shows the correct time.)
+(The Swiss times shift by 1 hour in the weeks when US and EU daylight-saving dates differ; the messages always show the correct time.)
 
-## Setup (once)
-1. Repository → **Settings → Secrets and variables → Actions → New repository secret**:
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHAT_ID`
-2. Same page, tab **Variables** (optional): `RISK_USD` (default 400) and `MAX_MICROS` (default 10).
-3. **Actions** tab → "trading signals" → **Run workflow** with job `ping`. A test message should arrive.
+## Data
+Free sources:
+- Yahoo QQQ (real-time) × ratio to NQ futures. The ratio comes from Yahoo futures, which are 10 min delayed. Measured error: about 1.6 points.
+- Coinbase PAXG (real-time) + basis to MGC futures. Measured error: about $1.
 
-## Notes
-- Data source: Yahoo Finance, free and unofficial. QQQ is used for the ORB direction (it matched the Nasdaq CFD on 19 of 20 test days). GC futures are used for gold, which is the same price as MGC.
-- GitHub can start scheduled jobs a few minutes late. The bot starts about 20 min early and waits. If it is still too late, it sends "no signal today" instead of a stale signal.
-- A private repository has 2,000 free Action minutes per month. This bot needs about 1,000.
-- Backtest and full analysis: see the TradingLab folder on the PC.
+Your broker fills the orders at the exact levels; the alerts are informational.
+
+## Setup
+- Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- Variables (optional): `RISK_USD` (default 400), `MAX_MICROS` (default 10).
+- The repository must be **public** for unlimited free Action minutes.
+- Test: Actions → trading signals → Run workflow → `ping`, or `replay` with a past date. The replay prints the whole simulated day in the log.

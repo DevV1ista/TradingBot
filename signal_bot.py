@@ -225,7 +225,7 @@ if __name__ == "__main__":
     if not td and a.job != "ping" and not right_slot(a.slot):
         sys.exit(0)
     if a.job == "ping":
-        send(f"✅ Signal bot connected. Risk per trade ${RISK:.0f}. Gold signal ~07:00, NAS signal ~15:35 (CH).")
+        send(f"✅ Signal-Bot verbunden. Risiko pro Trade ${RISK:.0f}. Gold-Order ~07:00, NAS-Signal ~15:35 (CH), dazu Vorwarnungen, SL/TP-Meldungen und Schliess-Erinnerungen.")
     elif a.job == "gold":
         gold(td)
     else:
