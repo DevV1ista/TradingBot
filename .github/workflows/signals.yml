@@ -45,6 +45,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RISK_USD: ${{ vars.RISK_USD }}
           MAX_MICROS: ${{ vars.MAX_MICROS }}
+          STRATEGY: ${{ vars.STRATEGY }}
         run: |
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"

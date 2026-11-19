@@ -32,7 +32,7 @@ import yfinance as yf
 NY = ZoneInfo("America/New_York")
 CH = ZoneInfo("Europe/Zurich")
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-RISK = float(os.getenv("RISK_USD") or "400")
+RISK = float(os.getenv("RISK_USD") or "300")
 MAX_MICROS = int(os.getenv("MAX_MICROS") or "10")
 
 
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     if not td and a.job != "ping" and not right_slot(a.slot):
         sys.exit(0)
     if a.job == "ping":
-        send(f"✅ Signal-Bot verbunden. Risiko pro Trade ${RISK:.0f}. Gold-Order ~07:00, NAS-Signal ~15:35 (CH), dazu Vorwarnungen, SL/TP-Meldungen und Schliess-Erinnerungen.")
+        send(f"✅ Signal-Bot verbunden. Strategie: {os.getenv("STRATEGY") or "balanced"} · Risiko pro Trade ${RISK:.0f}. XAUUSD-Order ~07:00, NASDAQ ~15:35 (CH), dazu Vorwarnungen, TP/SL-Meldungen und Schliess-Erinnerungen.")
     elif a.job == "gold":
         gold(td)
     else:
