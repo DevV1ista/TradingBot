@@ -19,16 +19,31 @@ Dein PC muss nicht laufen. Der GitHub-Workflow laeuft ca. vier Stunden, speicher
 - Ein `job=ping` prueft Telegram, ohne den Bot dauerhaft zu starten; `job=replay` ist der bisherige Rueckblick.
 - `job=continue` ist nur fuer die automatische Fortsetzung vorgesehen.
 
-## Fehler und Neustart
+## Fehler und Neustart (Stand 2026-11-20 abends)
 
-- Nach zehn aufeinanderfolgenden Fehlern der Marktdaten stoppt die Kette. Ein fehlgeschlagener Workflow versucht, sofort eine Telegram-Warnung zu senden.
-- Ein zweiter GitHub-Workflow meldet abgeschlossene fehlgeschlagene oder abgebrochene Runs, soweit GitHub selbst die Ausfuehrung ausloest.
-- Falls keine neue GitHub-Ausfuehrung mehr erzeugt wird, kann diese Architektur **keine garantierte externe Ausfallmeldung** schicken. In diesem Fall musst du GitHub Actions pruefen und `job=start` erneut starten.
-- Ein manueller `job=start` ersetzt eine bereits laufende Kette und kann daher eine Abbruchwarnung fuer den alten Run ausloesen.
+- **Datenausfall** (Yahoo / Coinbase / Swissquote): Nach ca. 5 Minuten ohne Daten kommt eine Telegram-Warnung. Die Kette laeuft weiter, und sobald wieder Daten da sind, kommt "Kursdaten wieder da". Der Bot holt verpasste Minuten nach.
+- **Telegram kurz nicht erreichbar**: Die Kette laeuft weiter, nur die Statusmeldung fehlt.
+- **Selbstheilung** (`trading failure alert`, ereignisbasiert, funktioniert ohne Cron):
+  - Endet ein Ketten-Run mit Fehler oder Zeitlimit und laeuft kein anderer Run, startet die Kette automatisch neu. Das passiert hoechstens 3x pro Stunde, danach kommt eine Warnung.
+  - Wird ein Run abgebrochen, weil ein neuer `start` ihn ersetzt, kommt keine Warnung (kein Fehlalarm).
+  - Wird ein Run von dir abgebrochen und kein anderer laeuft, kommt "Bot gestoppt", aber kein Neustart.
+- **Waechter** (`job=watchdog`): Er startet die Kette nur, wenn sie nicht laeuft, und darf beliebig oft aufgerufen werden. Feste GitHub-Zeiten (cron) loesen in diesem Repo nachweislich nicht aus (Tests am 20.11.: 0 Ausloesungen in ueber 1 Stunde). Deshalb kann ihn ein kostenloser externer Zeitdienst aufrufen, siehe unten.
+
+## Optional: externer Waechter (cron-job.org, kostenlos)
+
+1. GitHub → Settings → Developer settings → Fine-grained tokens → **Generate new token**:
+   - Repository: nur `TradingBot`
+   - Permission: **Actions: Read and write**
+   - Ablauf: z.B. 1 Jahr
+2. Bei cron-job.org (kostenloses Konto) einen Cronjob anlegen:
+   - URL `https://api.github.com/repos/DevV1ista/TradingBot/actions/workflows/signals.yml/dispatches`
+   - Methode **POST**, alle 30 Minuten
+   - Header `Authorization: Bearer <dein Token>`, `Accept: application/vnd.github+json`, `Content-Type: application/json`
+   - Body `{"ref":"main","inputs":{"job":"watchdog"}}`
 
 ## Stoppen
 
-Um die Kette anzuhalten: In GitHub Actions den laufenden `trading signals`-Run mit **Cancel workflow** abbrechen. Falls der naechste Run bereits angelegt ist, diesen ebenfalls abbrechen. Ein abgebrochener Run loest keine neue Fortsetzung aus. Die technische Alternative ist **Disable workflow**, wodurch zukuenftige Workflow-Ausfuehrungen blockiert werden (spaeter wieder aktivieren).
+Um die Kette anzuhalten: In GitHub Actions den laufenden `trading signals`-Run mit **Cancel workflow** abbrechen. Falls der naechste Run bereits angelegt ist, diesen ebenfalls abbrechen. Ein abgebrochener Run loest keine neue Fortsetzung aus, und auch der Waechter startet ihn danach nicht neu. Die technische Alternative ist **Disable workflow**, wodurch zukuenftige Workflow-Ausfuehrungen blockiert werden (spaeter wieder aktivieren).
 
 ## Grenzen
 
@@ -39,7 +54,8 @@ Um die Kette anzuhalten: In GitHub Actions den laufenden `trading signals`-Run m
 
 ## Technische Tests
 
-- `python -m unittest -v test_self_runner`: lokale, netzwerkfreie Tests
+- `python -m unittest -v test_self_runner`: lokale, netzwerkfreie Tests (10 Tests). Sie pruefen auch, dass Daten- und Telegram-Ausfaelle die Kette nicht stoppen.
+- Die Selbstheilung und die Waechter-Entscheidungen wurden lokal mit simulierten GitHub-Antworten getestet: Kette laeuft, Uebergabe, Kette tot, Fehler, Stopp durch dich, Fehlerschleife.
 - Zwei harmlose GitHub-Actions-Runs (`probe` und `probe_done`) haben die automatische Workflow-Weitergabe mit dem integrierten `GITHUB_TOKEN` bestaetigt.
 - Die `state/`-Checkpointfunktion wurde auf einem separaten Feature-Branch mit einem echten Push getestet; die temporaeren Dateien wurden danach geloescht.
 
