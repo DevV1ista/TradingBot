@@ -33,6 +33,12 @@ try {
     inputs: { job: "segment", segment: "1", slot: "est" },
   });
   assert.equal(calls[0].options.headers.Authorization, "Bearer fake-test-token");
+  await scheduler.scheduled(c, { ENABLED: "true", PING_ONLY: "true", GITHUB_TOKEN: "fake-test-token" });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    ref: "main",
+    inputs: { job: "ping" },
+  });
 } finally {
   globalThis.fetch = savedFetch;
 }
