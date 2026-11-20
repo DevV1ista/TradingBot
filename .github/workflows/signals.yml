@@ -14,17 +14,23 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "ping = Telegram test, replay = simulate a past day (prints in the log)"
+        description: "ping = Telegram test, replay = past day, segment = external scheduler"
         default: ping
       day:
         description: "for replay: YYYY-MM-DD (within the last ~25 days)"
+        default: ""
+      segment:
+        description: "for job=segment: 1, 2, or 3"
+        default: ""
+      slot:
+        description: "for job=segment: edt or est"
         default: ""
 
 permissions:
   contents: write
 
 concurrency:
-  group: watcher-${{ github.event.schedule || github.run_id }}
+  group: watcher-${{ (inputs.job == 'segment' && format('segment-{0}-{1}', inputs.segment, inputs.slot)) || github.event.schedule || github.run_id }}
 
 jobs:
   watch:
@@ -51,6 +57,10 @@ jobs:
           RISK_PCT: ${{ vars.RISK_PCT }}
           LOT_USD_XAU: ${{ vars.LOT_USD_XAU }}
           LOT_USD_US100: ${{ vars.LOT_USD_US100 }}
+          RUN_JOB: ${{ inputs.job }}
+          RUN_DAY: ${{ inputs.day }}
+          RUN_SEGMENT: ${{ inputs.segment }}
+          RUN_SLOT: ${{ inputs.slot }}
         run: |
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"
@@ -62,14 +72,20 @@ jobs:
             "49 14 * * 1-5") python watcher.py --segment 3 --slot edt ;;
             "49 15 * * 1-5") python watcher.py --segment 3 --slot est ;;
             *)
-              if [ "${{ inputs.job }}" = "replay" ]; then
-                python watcher.py --replay "${{ inputs.day }}"
+              if [ "$RUN_JOB" = "segment" ]; then
+                case "$RUN_SEGMENT:$RUN_SLOT" in
+                  1:edt|1:est|2:edt|2:est|3:edt|3:est)
+                    python watcher.py --segment "$RUN_SEGMENT" --slot "$RUN_SLOT" ;;
+                  *) echo "Invalid external segment/slot" >&2; exit 1 ;;
+                esac
+              elif [ "$RUN_JOB" = "replay" ]; then
+                python watcher.py --replay "$RUN_DAY"
               else
                 python signal_bot.py ping
               fi ;;
           esac
       - name: save state
-        if: always() && github.event_name == 'schedule'
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.job == 'segment'))
         run: |
           git add state || true
           if ! git diff --cached --quiet; then
