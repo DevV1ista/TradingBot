@@ -1,0 +1,26 @@
+{
+ "num": 1,
+ "phase": "P1",
+ "start": 100000.0,
+ "bal": 99500.26435756139,
+ "since": "2026-11-20",
+ "traded_days": [
+  "2026-11-20"
+ ],
+ "day": "2026-11-20",
+ "day_start_bal": 100000.0,
+ "status": "active",
+ "pending": null,
+ "last_payout": null,
+ "payouts": 0.0,
+ "fees": 590.0,
+ "fee_refunded": false,
+ "all": {
+  "trades": 1,
+  "wins": 0,
+  "pnl": -499.7356424386121,
+  "days": 0,
+  "accounts_lost": 0,
+  "passed": 0
+ }
+}
