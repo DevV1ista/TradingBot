@@ -61,5 +61,25 @@ class AutoRunnerTests(unittest.TestCase):
         checkpoint.assert_called_once()
 
 
+    @patch("self_runner.checkpoint")
+    @patch("self_runner.time.sleep")
+    @patch("self_runner.time.monotonic")
+    @patch("self_runner.datetime")
+    @patch("self_runner.telegram_status")
+    def test_repeated_market_errors_stop_the_chain(self, send, date_mock, monotonic, sleep, checkpoint):
+        date_mock.now.return_value = datetime(2026, 11, 20, 11, 0, tzinfo=NY)
+        calls = iter(range(1000))
+        monotonic.side_effect = lambda: next(calls)
+        with patch("self_runner.Bot") as bot_type:
+            bot_type.return_value.s = {"sent": ["bot_online"]}
+            bot_type.return_value.tick.side_effect = RuntimeError("data source offline")
+            with self.assertRaisesRegex(RuntimeError, "10 consecutive checks"):
+                self_runner.run_service(300)
+            self.assertEqual(bot_type.return_value.tick.call_count, 10)
+            bot_type.return_value.save.assert_called()
+            checkpoint.assert_called_once()
+
+
+
 if __name__ == "__main__":
     unittest.main()
