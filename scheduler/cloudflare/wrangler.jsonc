@@ -1,0 +1,15 @@
+{
+  "name": "tradingbot-scheduler",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-20",
+  "vars": {
+    "ENABLED": "false"
+  },
+  "triggers": {
+    "crons": [
+      "39 4,5 * * MON-FRI",
+      "29 9,10 * * MON-FRI",
+      "49 14,15 * * MON-FRI"
+    ]
+  }
+}
