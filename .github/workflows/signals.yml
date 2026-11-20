@@ -5,12 +5,12 @@ name: trading signals
 # exits immediately. State (orders, fills, results) is committed to state/ between segments.
 on:
   schedule:
-    - cron: "40 4 * * 1-5"    # segment 1 summer (00:40 New York)
-    - cron: "40 5 * * 1-5"    # segment 1 winter
-    - cron: "30 9 * * 1-5"    # segment 2 summer (05:30 New York)
-    - cron: "30 10 * * 1-5"   # segment 2 winter
-    - cron: "50 14 * * 1-5"   # segment 3 summer (10:50 New York)
-    - cron: "50 15 * * 1-5"   # segment 3 winter
+    - cron: "39 4 * * 1-5"    # segment 1 summer (00:40 New York)
+    - cron: "39 5 * * 1-5"    # segment 1 winter
+    - cron: "29 9 * * 1-5"    # segment 2 summer (05:30 New York)
+    - cron: "29 10 * * 1-5"   # segment 2 winter
+    - cron: "49 14 * * 1-5"   # segment 3 summer (10:50 New York)
+    - cron: "49 15 * * 1-5"   # segment 3 winter
   workflow_dispatch:
     inputs:
       job:
@@ -55,12 +55,12 @@ jobs:
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"
           case "${{ github.event.schedule }}" in
-            "40 4 * * 1-5")  python watcher.py --segment 1 --slot edt ;;
-            "40 5 * * 1-5")  python watcher.py --segment 1 --slot est ;;
-            "30 9 * * 1-5")  python watcher.py --segment 2 --slot edt ;;
-            "30 10 * * 1-5") python watcher.py --segment 2 --slot est ;;
-            "50 14 * * 1-5") python watcher.py --segment 3 --slot edt ;;
-            "50 15 * * 1-5") python watcher.py --segment 3 --slot est ;;
+            "39 4 * * 1-5")  python watcher.py --segment 1 --slot edt ;;
+            "39 5 * * 1-5")  python watcher.py --segment 1 --slot est ;;
+            "29 9 * * 1-5")  python watcher.py --segment 2 --slot edt ;;
+            "29 10 * * 1-5") python watcher.py --segment 2 --slot est ;;
+            "49 14 * * 1-5") python watcher.py --segment 3 --slot edt ;;
+            "49 15 * * 1-5") python watcher.py --segment 3 --slot est ;;
             *)
               if [ "${{ inputs.job }}" = "replay" ]; then
                 python watcher.py --replay "${{ inputs.day }}"
