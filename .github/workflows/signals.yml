@@ -1,4 +1,6 @@
 name: trading signals
+# the job name in the run title lets "trading failure alert" recognise bot-chain runs
+run-name: trading signals (${{ inputs.job }})
 
 # Start once from Actions -> Run workflow -> job=start.
 # Each run lasts at most four hours and dispatches the next one with GITHUB_TOKEN.

@@ -1,4 +1,5 @@
 """GitHub Actions supervisor: time-limited runs that hand over to the next run.
+Data outages and Telegram hiccups only warn; they never stop the chain (2026-11-20).
 
 No cron, daemon, external scheduler or machine outside GitHub required.
 The original trading strategy remains in watcher.Bot, unchanged.
@@ -54,6 +55,14 @@ def telegram_status(message):
     raise RuntimeError("Could not deliver Telegram status")
 
 
+def notify(message):
+    """status messages must never stop the trading chain (Telegram can be briefly unreachable)"""
+    try:
+        telegram_status(message)
+    except Exception as exc:
+        print(f"Status message not delivered: {exc}", flush=True)
+
+
 def checkpoint():
     """Persist trading state before handing off; never continue if persistence fails."""
     subprocess.run(["git", "add", "--", "state"], check=True)
@@ -63,15 +72,15 @@ def checkpoint():
     if staged.returncode != 1:
         raise RuntimeError("git diff failed")
     subprocess.run(["git", "commit", "-m", f"state {datetime.now(tz=NY):%Y-%m-%d_%H%M%S}"], check=True)
-    for attempt in range(3):
+    for attempt in range(6):  # ~1 minute of retries before giving up
         pull = subprocess.run(["git", "pull", "--rebase", "--quiet"], check=False)
         if pull.returncode == 0:
             push = subprocess.run(["git", "push", "--quiet"], check=False)
             if push.returncode == 0:
                 print("Checkpoint pushed", flush=True)
                 return
-        if attempt < 2:
-            time.sleep(5)
+        if attempt < 5:
+            time.sleep(10)
     raise RuntimeError("Could not persist state to GitHub; chain stopped to avoid duplicate signals")
 
 
@@ -86,10 +95,11 @@ def run_service(seconds, initial=False):
     errors = 0
     next_checkpoint = start + CHECKPOINT_SECONDS
 
+    warned = False  # data-outage warning already sent
     if initial:
         now_ch = datetime.now(tz=CH)
         market = "Handelszeit" if segment_at(now_ch) else "Wartet auf Handelszeit"
-        telegram_status(f"Trading-Bot gestartet ({now_ch:%d.%m.%Y %H:%M} CH). Status: {market}. GitHub-Autostart aktiv.")
+        notify(f"Trading-Bot gestartet ({now_ch:%d.%m.%Y %H:%M} CH). Status: {market}. GitHub-Autostart aktiv.")
     try:
         while time.monotonic() < deadline:
             now = datetime.now(tz=NY)
@@ -105,7 +115,7 @@ def run_service(seconds, initial=False):
                 if key is not None:
                     bot = Bot(LiveData(clock), clock, telegram, now.date())
                     if "bot_online" not in bot.s["sent"]:
-                        telegram_status(f"Trading-Bot kontrolliert den Handelstag {now:%d.%m.%Y} (New York). Marktstatus und Signale werden geprueft.")
+                        notify(f"Trading-Bot kontrolliert den Handelstag {now:%d.%m.%Y} (New York). Marktstatus und Signale werden geprueft.")
                         bot.s["sent"].append("bot_online")
                         bot.save()
                     print(f"Monitoring NY day {now.date()} / segment {segment}", flush=True)
@@ -115,17 +125,26 @@ def run_service(seconds, initial=False):
             if bot is not None:
                 try:
                     bot.tick()
-                    errors = 0
+                    if warned:
+                        notify("✅ Trading-Bot: Kursdaten wieder da – Überwachung läuft normal weiter.")
+                    errors, warned = 0, False
                 except Exception:
                     errors += 1
                     traceback.print_exc()
-                    if errors >= MAX_CONSECUTIVE_ERRORS:
-                        raise RuntimeError("Trading watcher failed 10 consecutive checks")
+                    # a data outage (Yahoo / Coinbase / Swissquote) must not stop the chain: warn once,
+                    # keep checking; the watcher catches up on missed minutes when data returns
+                    if errors >= MAX_CONSECUTIVE_ERRORS and not warned:
+                        notify("⚠️ Trading-Bot: Kursdaten seit ca. 5 Min nicht verfügbar – Meldungen können fehlen. "
+                               "Der Bot versucht es weiter. Bitte offene Positionen selbst im Blick behalten.")
+                        warned = True
 
             if time.monotonic() >= next_checkpoint:
                 if bot is not None:
                     bot.save()
-                checkpoint()
+                try:
+                    checkpoint()
+                except Exception:  # GitHub hiccup: try again at the next checkpoint / at the end of the run
+                    traceback.print_exc()
                 next_checkpoint = time.monotonic() + CHECKPOINT_SECONDS
 
             remaining = deadline - time.monotonic()

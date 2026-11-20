@@ -1,7 +1,12 @@
 name: trading failure alert
 
-# Separate backup notification if a runner is cancelled or reaches its time limit.
-# No checkout or untrusted code is executed in this privileged workflow.
+# Runs whenever a "trading signals" run ends (event-based, works without cron).
+# Only bot-chain runs (job start/continue) are handled; ping/replay runs are ignored.
+#   failure / timed_out, no other bot run active -> restart the chain automatically
+#                                                   (max 3 restarts per hour) + Telegram info
+#   cancelled because a newer run took over       -> nothing (no false alarm)
+#   cancelled by you, no other run active         -> Telegram "bot stopped", no restart
+# No checkout: no repository code is executed in this privileged workflow.
 on:
   workflow_run:
     workflows:
@@ -10,26 +15,62 @@ on:
       - completed
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  notify:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled' || github.event.workflow_run.conclusion == 'timed_out' }}
+  heal:
+    if: ${{ (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled' || github.event.workflow_run.conclusion == 'timed_out') && (contains(github.event.workflow_run.display_title, '(start)') || contains(github.event.workflow_run.display_title, '(continue)')) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
-      - name: Warn on failed or cancelled bot runs
+      - name: Restart the chain or report
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        shell: python
         run: |
-          if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
-            echo "Missing Telegram secrets" >&2
-            exit 1
-          fi
-          curl --fail --silent --show-error --retry 2 --max-time 30 \
-            --data-urlencode "chat_id=$CHAT_ID" \
-            --data-urlencode "text=Trading-Bot WARNUNG: GitHub-Run beendet mit Status $CONCLUSION. Bitte ueberpruefen, ob ein Folgelauf gestartet ist. $RUN_URL" \
-            "https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
+          import json, os, urllib.request, urllib.parse
+          from datetime import datetime, timedelta, timezone
+
+          repo, token = os.environ["REPO"], os.environ["GH_TOKEN"]
+
+          def gh(path, body=None):
+              req = urllib.request.Request(f"https://api.github.com/repos/{repo}{path}",
+                                           data=None if body is None else json.dumps(body).encode(),
+                                           method="GET" if body is None else "POST")
+              req.add_header("Authorization", f"Bearer {token}")
+              req.add_header("Accept", "application/vnd.github+json")
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return json.loads(r.read() or b"{}")
+
+          def telegram(text):
+              if not os.environ.get("BOT_TOKEN") or not os.environ.get("CHAT_ID"):
+                  print("no Telegram secrets"); return
+              data = urllib.parse.urlencode({"chat_id": os.environ["CHAT_ID"], "text": text}).encode()
+              urllib.request.urlopen(f"https://api.telegram.org/bot{os.environ['BOT_TOKEN']}/sendMessage", data, timeout=20)
+
+          runs = gh("/actions/workflows/signals.yml/runs?per_page=30")["workflow_runs"]
+          me = int(os.environ["RUN_ID"])
+          active = [r for r in runs if r["id"] != me and r["status"] in ("queued", "in_progress", "waiting", "requested", "pending")]
+          conclusion, url = os.environ["CONCLUSION"], os.environ["RUN_URL"]
+          print("conclusion", conclusion, "| other active runs:", [r["id"] for r in active])
+
+          if active:
+              print("another bot run is active (newer start or continuation) - nothing to do")
+          elif conclusion == "cancelled":
+              telegram(f"Trading-Bot gestoppt (Lauf abgebrochen, kein weiterer Lauf aktiv). Neu starten: Actions -> trading signals -> Run workflow -> job=start. {url}")
+          else:
+              hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+              recent_bad = [r for r in runs if r["conclusion"] in ("failure", "timed_out")
+                            and datetime.fromisoformat(r["updated_at"].replace("Z", "+00:00")) > hour_ago]
+              if len(recent_bad) > 3:
+                  telegram(f"Trading-Bot WARNUNG: {len(recent_bad)} Fehler in der letzten Stunde - automatischer Neustart pausiert. Bitte GitHub pruefen. {url}")
+              else:
+                  gh("/actions/workflows/signals.yml/dispatches", {"ref": "main", "inputs": {"job": "continue"}})
+                  telegram(f"Trading-Bot: Lauf beendet mit '{conclusion}' - automatisch neu gestartet. Kein Handlungsbedarf. {url}")

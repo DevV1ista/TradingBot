@@ -97,18 +97,52 @@ class AutoRunnerTests(unittest.TestCase):
     @patch("self_runner.time.monotonic")
     @patch("self_runner.datetime")
     @patch("self_runner.telegram_status")
-    def test_repeated_market_errors_stop_the_chain(self, send, date_mock, monotonic, sleep, checkpoint):
+    def test_market_outage_warns_once_and_keeps_running(self, send, date_mock, monotonic, sleep, checkpoint):
+        """a long data outage must NOT stop the chain: one warning, then keep checking"""
         date_mock.now.return_value = datetime(2026, 11, 20, 11, 0, tzinfo=NY)
-        calls = iter(range(1000))
+        calls = iter(range(10000))
         monotonic.side_effect = lambda: next(calls)
         with patch("self_runner.Bot") as bot_type:
             bot_type.return_value.s = {"sent": ["bot_online"]}
             bot_type.return_value.tick.side_effect = RuntimeError("data source offline")
-            with self.assertRaisesRegex(RuntimeError, "10 consecutive checks"):
-                self_runner.run_service(300)
-            self.assertEqual(bot_type.return_value.tick.call_count, 10)
+            self_runner.run_service(300)  # no exception
+            self.assertGreater(bot_type.return_value.tick.call_count, 30)
             bot_type.return_value.save.assert_called()
-            checkpoint.assert_called_once()
+        warnings = [c for c in send.call_args_list if "Kursdaten" in c.args[0]]
+        self.assertEqual(len(warnings), 1)
+
+    @patch("self_runner.checkpoint")
+    @patch("self_runner.time.sleep")
+    @patch("self_runner.time.monotonic")
+    @patch("self_runner.datetime")
+    @patch("self_runner.telegram_status")
+    def test_outage_recovery_sends_all_clear(self, send, date_mock, monotonic, sleep, checkpoint):
+        date_mock.now.return_value = datetime(2026, 11, 20, 11, 0, tzinfo=NY)
+        calls = iter(range(10000))
+        monotonic.side_effect = lambda: next(calls)
+        outcomes = [RuntimeError("offline")] * 12 + [None] * 500
+        with patch("self_runner.Bot") as bot_type:
+            bot_type.return_value.s = {"sent": ["bot_online"]}
+            bot_type.return_value.tick.side_effect = outcomes
+            self_runner.run_service(200)
+        texts = [c.args[0] for c in send.call_args_list]
+        self.assertEqual(sum("nicht verfügbar" in t for t in texts), 1)
+        self.assertEqual(sum("wieder da" in t for t in texts), 1)
+
+    @patch("self_runner.checkpoint")
+    @patch("self_runner.time.sleep")
+    @patch("self_runner.time.monotonic")
+    @patch("self_runner.datetime")
+    @patch("self_runner.telegram_status", side_effect=RuntimeError("Telegram down"))
+    def test_telegram_outage_does_not_stop_the_chain(self, send, date_mock, monotonic, sleep, checkpoint):
+        date_mock.now.return_value = datetime(2026, 11, 20, 11, 0, tzinfo=NY)
+        calls = iter(range(10000))
+        monotonic.side_effect = lambda: next(calls)
+        with patch("self_runner.Bot") as bot_type:
+            bot_type.return_value.s = {"sent": []}
+            self_runner.run_service(100, initial=True)  # no exception
+            bot_type.return_value.tick.assert_called()
+        checkpoint.assert_called()
 
 
 
