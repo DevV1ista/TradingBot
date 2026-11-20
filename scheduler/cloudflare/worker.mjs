@@ -49,6 +49,8 @@ export default {
       throw new Error("Missing GITHUB_TOKEN Worker secret");
     }
 
+    // During setup, PING_ONLY=true verifies the GitHub/Telegram connection without starting the watcher.
+    const inputs = env.PING_ONLY === "true" ? { job: "ping" } : { job: "segment", ...selected };
     const response = await fetch(
       "https://api.github.com/repos/DevV1ista/TradingBot/actions/workflows/signals.yml/dispatches",
       {
@@ -62,7 +64,7 @@ export default {
         },
         body: JSON.stringify({
           ref: "main",
-          inputs: { job: "segment", ...selected },
+          inputs,
         }),
       },
     );
@@ -70,7 +72,7 @@ export default {
       const body = (await response.text()).slice(0, 300);
       throw new Error("GitHub dispatch failed: HTTP " + response.status + " " + body);
     }
-    console.log("GitHub dispatch accepted: " + JSON.stringify(selected));
+    console.log("GitHub dispatch accepted: " + JSON.stringify(inputs));
   },
   async fetch() {
     return new Response("Scheduled access only", { status: 404 });
