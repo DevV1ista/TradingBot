@@ -1,45 +1,44 @@
 name: trading signals
 
-# The watcher runs all trading day in 3 segments (each < 6 h, GitHub's job limit).
-# Times are UTC; every segment has a summer (edt) and a winter (est) cron, the inactive one
-# exits immediately. State (orders, fills, results) is committed to state/ between segments.
+# Start once from Actions -> Run workflow -> job=start.
+# Each run lasts at most four hours and dispatches the next one with GITHUB_TOKEN.
+# No cron; all prices, holidays and strategy logic remain in watcher.py.
 on:
-  schedule:
-    - cron: "39 4 * * 1-5"    # segment 1 summer (00:40 New York)
-    - cron: "39 5 * * 1-5"    # segment 1 winter
-    - cron: "29 9 * * 1-5"    # segment 2 summer (05:30 New York)
-    - cron: "29 10 * * 1-5"   # segment 2 winter
-    - cron: "49 14 * * 1-5"   # segment 3 summer (10:50 New York)
-    - cron: "49 15 * * 1-5"   # segment 3 winter
   workflow_dispatch:
     inputs:
       job:
-        description: "ping = Telegram test, replay = simulate a past day (prints in the log)"
-        default: ping
+        description: "start = autostart, ping = Telegram test, replay = past day (internal: continue/probe)"
+        default: start
+        type: string
       day:
-        description: "for replay: YYYY-MM-DD (within the last ~25 days)"
+        description: "Only for replay: YYYY-MM-DD"
         default: ""
+        type: string
 
 permissions:
   contents: write
+  actions: write
 
+# Manual start replaces any older chain; automatic continuation waits until previous run ends.
 concurrency:
-  group: watcher-${{ github.event.schedule || github.run_id }}
+  group: ${{ (inputs.job == 'start' || inputs.job == 'continue') && 'tradingbot-service' || github.run_id }}
+  cancel-in-progress: ${{ inputs.job == 'start' }}
 
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 355
+    timeout-minutes: 335
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: run
+      - name: Execute requested mode
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -51,28 +50,55 @@ jobs:
           RISK_PCT: ${{ vars.RISK_PCT }}
           LOT_USD_XAU: ${{ vars.LOT_USD_XAU }}
           LOT_USD_US100: ${{ vars.LOT_USD_US100 }}
+          RUN_JOB: ${{ inputs.job }}
+          RUN_DAY: ${{ inputs.day }}
         run: |
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"
-          case "${{ github.event.schedule }}" in
-            "39 4 * * 1-5")  python watcher.py --segment 1 --slot edt ;;
-            "39 5 * * 1-5")  python watcher.py --segment 1 --slot est ;;
-            "29 9 * * 1-5")  python watcher.py --segment 2 --slot edt ;;
-            "29 10 * * 1-5") python watcher.py --segment 2 --slot est ;;
-            "49 14 * * 1-5") python watcher.py --segment 3 --slot edt ;;
-            "49 15 * * 1-5") python watcher.py --segment 3 --slot est ;;
-            *)
-              if [ "${{ inputs.job }}" = "replay" ]; then
-                python watcher.py --replay "${{ inputs.day }}"
-              else
-                python signal_bot.py ping
-              fi ;;
+          case "$RUN_JOB" in
+            start)      python self_runner.py --seconds 14400 --initial ;;
+            continue)   python self_runner.py --seconds 14400 ;;
+            ping)       python signal_bot.py ping ;;
+            replay)     python watcher.py --replay "$RUN_DAY" ;;
+            probe)      echo "Self-dispatch probe: initial run" ;;
+            probe_done) echo "Self-dispatch probe: child run arrived successfully" ;;
+            *)          echo "Unknown job: $RUN_JOB" >&2; exit 1 ;;
           esac
-      - name: save state
-        if: always() && github.event_name == 'schedule'
+      - name: Dispatch next GitHub Actions run
+        if: ${{ success() && (inputs.job == 'start' || inputs.job == 'continue' || inputs.job == 'probe') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_JOB: ${{ inputs.job }}
+          RUN_REF: ${{ github.ref_name }}
         run: |
-          git add state || true
-          if ! git diff --cached --quiet; then
-            git commit -m "state $(date -u +%F_%H%M)"
-            for i in 1 2 3; do git pull --rebase --quiet && git push --quiet && break; sleep 5; done
+          if [ "$RUN_JOB" = "probe" ]; then
+            body=$(printf '{"ref":"%s","inputs":{"job":"probe_done"}}' "$RUN_REF")
+          else
+            body='{"ref":"main","inputs":{"job":"continue"}}'
           fi
+          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 3 --max-time 30 \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$REPOSITORY/actions/workflows/signals.yml/dispatches" \
+            -d "$body"
+          echo "Next workflow_dispatch accepted by GitHub."
+
+      - name: Notify Telegram on failures
+        if: ${{ failure() && (inputs.job == 'start' || inputs.job == 'continue') }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Cannot send Telegram warning: missing secrets" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --retry 2 --max-time 30 \
+            --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+            --data-urlencode "text=Trading-Bot WARNUNG: Lauf fehlgeschlagen. Autostart-Kette angehalten. Bitte GitHub pruefen und gegebenenfalls erneut job=start ausloesen. $RUN_URL" \
+            "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage"

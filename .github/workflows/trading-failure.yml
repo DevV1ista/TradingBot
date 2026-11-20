@@ -1,0 +1,35 @@
+name: trading failure alert
+
+# Separate backup notification if a runner is cancelled or reaches its time limit.
+# No checkout or untrusted code is executed in this privileged workflow.
+on:
+  workflow_run:
+    workflows:
+      - trading signals
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled' || github.event.workflow_run.conclusion == 'timed_out' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Warn on failed or cancelled bot runs
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+            echo "Missing Telegram secrets" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --retry 2 --max-time 30 \
+            --data-urlencode "chat_id=$CHAT_ID" \
+            --data-urlencode "text=Trading-Bot WARNUNG: GitHub-Run beendet mit Status $CONCLUSION. Bitte ueberpruefen, ob ein Folgelauf gestartet ist. $RUN_URL" \
+            "https://api.telegram.org/bot$BOT_TOKEN/sendMessage"

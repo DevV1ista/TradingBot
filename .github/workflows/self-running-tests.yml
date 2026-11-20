@@ -1,0 +1,27 @@
+name: self-running bot tests
+on:
+  push:
+    branches: [feature/self-running-bot]
+  pull_request:
+    paths:
+      - self_runner.py
+      - test_self_runner.py
+      - .github/workflows/signals.yml
+      - .github/workflows/trading-failure.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m py_compile watcher.py self_runner.py signal_bot.py
+      - run: python -m unittest -v test_self_runner
