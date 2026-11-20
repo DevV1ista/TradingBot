@@ -54,6 +54,9 @@ jobs:
           LOT_USD_US100: ${{ vars.LOT_USD_US100 }}
           RUN_JOB: ${{ inputs.job }}
           RUN_DAY: ${{ inputs.day }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"
@@ -62,6 +65,7 @@ jobs:
             continue)   python self_runner.py --seconds 14400 ;;
             ping)       python signal_bot.py ping ;;
             replay)     python watcher.py --replay "$RUN_DAY" ;;
+            watchdog)   python watchdog.py ;;
             probe)      echo "Self-dispatch probe: initial run" ;;
             probe_done) echo "Self-dispatch probe: child run arrived successfully" ;;
             *)          echo "Unknown job: $RUN_JOB" >&2; exit 1 ;;
