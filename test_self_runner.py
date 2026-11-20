@@ -1,5 +1,9 @@
 """No network / no real Telegram or trading in these tests."""
 import unittest
+import os
+import subprocess
+import tempfile
+from pathlib import Path
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -60,6 +64,33 @@ class AutoRunnerTests(unittest.TestCase):
         send.assert_called_once()
         checkpoint.assert_called_once()
 
+
+    def test_checkpoint_pushes_state_to_git(self):
+        def git(*args, cwd=None):
+            return subprocess.run(["git", *args], cwd=cwd, check=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with tempfile.TemporaryDirectory() as base:
+            remote = Path(base) / "origin.git"
+            work = Path(base) / "work"
+            git("init", "--bare", str(remote))
+            git("init", "-b", "main", str(work))
+            git("config", "user.name", "test", cwd=work)
+            git("config", "user.email", "test@example.invalid", cwd=work)
+            git("remote", "add", "origin", str(remote), cwd=work)
+            (work / "state").mkdir()
+            (work / "state" / "README.md").write_text("initial")
+            git("add", "state", cwd=work)
+            git("commit", "-m", "initial", cwd=work)
+            git("push", "-u", "origin", "main", cwd=work)
+            (work / "state" / "checkpoint.json").write_text('{"ok":true}')
+            original = os.getcwd()
+            try:
+                os.chdir(work)
+                self_runner.checkpoint()
+            finally:
+                os.chdir(original)
+            data = git("--git-dir", str(remote), "show", "main:state/checkpoint.json")
+            self.assertEqual(data.stdout.decode(), '{"ok":true}')
 
     @patch("self_runner.checkpoint")
     @patch("self_runner.time.sleep")
