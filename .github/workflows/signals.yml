@@ -64,21 +64,6 @@ jobs:
             probe_done) echo "Self-dispatch probe: child run arrived successfully" ;;
             *)          echo "Unknown job: $RUN_JOB" >&2; exit 1 ;;
           esac
-      - name: Notify Telegram on failures
-        if: ${{ failure() && (inputs.job == 'start' || inputs.job == 'continue') }}
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Cannot send Telegram warning: missing secrets" >&2
-            exit 1
-          fi
-          curl --fail --silent --show-error --retry 2 --max-time 30 \
-            --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
-            --data-urlencode "text=Trading-Bot WARNUNG: Lauf fehlgeschlagen. Autostart-Kette angehalten. Bitte GitHub pruefen und gegebenenfalls erneut job=start ausloesen. $RUN_URL" \
-            "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage"
       - name: Dispatch next GitHub Actions run
         if: ${{ success() && (inputs.job == 'start' || inputs.job == 'continue' || inputs.job == 'probe') }}
         env:
@@ -100,3 +85,19 @@ jobs:
             "https://api.github.com/repos/$REPOSITORY/actions/workflows/signals.yml/dispatches" \
             -d "$body"
           echo "Next workflow_dispatch accepted by GitHub."
+
+      - name: Notify Telegram on failures
+        if: ${{ failure() && (inputs.job == 'start' || inputs.job == 'continue') }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Cannot send Telegram warning: missing secrets" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --retry 2 --max-time 30 \
+            --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+            --data-urlencode "text=Trading-Bot WARNUNG: Lauf fehlgeschlagen. Autostart-Kette angehalten. Bitte GitHub pruefen und gegebenenfalls erneut job=start ausloesen. $RUN_URL" \
+            "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage"
