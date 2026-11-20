@@ -3,7 +3,8 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-11-20",
   "vars": {
-    "ENABLED": "false"
+    "ENABLED": "false",
+    "PING_ONLY": "true"
   },
   "triggers": {
     "crons": [
