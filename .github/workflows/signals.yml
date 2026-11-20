@@ -70,9 +70,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           RUN_JOB: ${{ inputs.job }}
+          RUN_REF: ${{ github.ref_name }}
         run: |
           if [ "$RUN_JOB" = "probe" ]; then
-            body='{"ref":"main","inputs":{"job":"probe_done"}}'
+            body=$(printf '{"ref":"%s","inputs":{"job":"probe_done"}}' "$RUN_REF")
           else
             body='{"ref":"main","inputs":{"job":"continue"}}'
           fi
