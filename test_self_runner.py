@@ -53,7 +53,7 @@ class AutoRunnerTests(unittest.TestCase):
     @patch("self_runner.datetime")
     def test_closed_weekend_does_not_start_trading(self, date_mock, monotonic, sleep, send, checkpoint):
         date_mock.now.return_value = datetime(2026, 11, 21, 11, tzinfo=NY)
-        monotonic.side_effect = [0, 0, 0, 1]
+        monotonic.side_effect = [0, 0, 0, 0, 1]
         with patch("self_runner.Bot") as bot:
             self_runner.run_service(1, initial=True)
             bot.assert_not_called()
