@@ -1,0 +1,23 @@
+name: scheduler diagnostic (temporary)
+
+# Safe diagnostic: does not run the trading bot or use secrets.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/scheduler-diagnostic.yml
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Print event and UTC time
+        run: |
+          echo "scheduler diagnostic: event=${{ github.event_name }}"
+          date -u +"UTC %Y-%m-%dT%H:%M:%SZ"
