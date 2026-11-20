@@ -104,7 +104,10 @@ def run_service(seconds, initial=False):
                 errors = 0
                 if key is not None:
                     bot = Bot(LiveData(clock), clock, telegram, now.date())
-                    bot.once("bot_online", f"Trading-Bot ist aktiv ({now:%d.%m.%Y}, New York). Signale werden ueberwacht.")
+                    if "bot_online" not in bot.s["sent"]:
+                        telegram_status(f"Trading-Bot kontrolliert den Handelstag {now:%d.%m.%Y} (New York). Marktstatus und Signale werden geprueft.")
+                        bot.s["sent"].append("bot_online")
+                        bot.save()
                     print(f"Monitoring NY day {now.date()} / segment {segment}", flush=True)
                 else:
                     print(f"Outside NY trading segments: {now:%Y-%m-%d %H:%M}", flush=True)
