@@ -1,0 +1,17 @@
+name: cron probe (temporary)
+
+# Harmless test: does GitHub fire scheduled (cron) events in this repository?
+# No checkout, no secrets, no trading. Will be removed after the test.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "cron fired '${{ github.event.schedule }}' at $(date -u +%H:%M:%S) UTC"
