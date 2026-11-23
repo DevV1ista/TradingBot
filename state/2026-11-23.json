@@ -37,8 +37,9 @@
   "t": 641.2553362165179,
   "n": 2.33,
   "upp": 2.33,
-  "status": "open",
-  "checked": "2026-11-23T10:15:00-05:00"
+  "status": "closed",
+  "checked": "2026-11-23T10:18:00-05:00",
+  "pnl": -498.04164446149434
  },
  "sent": [
   "bot_online",
@@ -47,7 +48,8 @@
   "gold_fill",
   "gold_exit",
   "nas_pre",
-  "nas_signal"
+  "nas_signal",
+  "nas_exit"
  ],
  "nas_pred": -1
 }
