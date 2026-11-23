@@ -1,6 +1,6 @@
 {
  "gold": {
-  "status": "long",
+  "status": "closed",
   "legs": {
    "long": {
     "entry": 3631.285,
@@ -25,13 +25,15 @@
   "alerted": [
    "long"
   ],
-  "atr": 108.24286760602679
+  "atr": 108.24286760602679,
+  "pnl": -479.32962000000134
  },
  "nas": {},
  "sent": [
   "bot_online",
   "gold_setup",
   "gold_pre_long",
-  "gold_fill"
+  "gold_fill",
+  "gold_exit"
  ]
 }
