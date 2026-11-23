@@ -34,6 +34,8 @@
   "gold_setup",
   "gold_pre_long",
   "gold_fill",
-  "gold_exit"
- ]
+  "gold_exit",
+  "nas_pre"
+ ],
+ "nas_pred": -1
 }
