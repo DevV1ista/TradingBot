@@ -1,6 +1,6 @@
 {
  "gold": {
-  "status": "short",
+  "status": "closed",
   "legs": {
    "long": {
     "entry": 3568.525,
@@ -21,9 +21,10 @@
     "t": 84.49692
    }
   },
-  "checked": "2026-11-25T10:15:00-05:00",
+  "checked": "2026-11-25T10:16:00-05:00",
   "alerted": [],
-  "atr": 113.70717075892857
+  "atr": 113.70717075892857,
+  "pnl": 1943.429160000001
  },
  "nas": {
   "side": -1,
@@ -44,7 +45,8 @@
   "gold_fill",
   "nas_pre",
   "nas_signal",
-  "nas_exit"
+  "nas_exit",
+  "gold_exit"
  ],
  "nas_pred": -1
 }

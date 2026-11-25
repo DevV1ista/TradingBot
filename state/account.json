@@ -2,7 +2,7 @@
  "num": 1,
  "phase": "P1",
  "start": 100000.0,
- "bal": 97617.01754216249,
+ "bal": 99560.44670216249,
  "since": "2026-11-20",
  "traded_days": [
   "2026-11-20",
@@ -19,9 +19,9 @@
  "fees": 590.0,
  "fee_refunded": false,
  "all": {
-  "trades": 6,
-  "wins": 1,
-  "pnl": -2382.9824578375074,
+  "trades": 7,
+  "wins": 2,
+  "pnl": -439.5532978375063,
   "days": 3,
   "accounts_lost": 0,
   "passed": 0
