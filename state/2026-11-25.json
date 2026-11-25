@@ -21,7 +21,7 @@
     "t": 84.49692
    }
   },
-  "checked": "2026-11-25T09:59:00-05:00",
+  "checked": "2026-11-25T10:03:00-05:00",
   "alerted": [],
   "atr": 113.70717075892857
  },
@@ -34,15 +34,17 @@
   "t": 739.4543805803571,
   "n": 2.02,
   "upp": 2.02,
-  "status": "open",
-  "checked": "2026-11-25T09:59:00-05:00"
+  "status": "closed",
+  "checked": "2026-11-25T09:59:00-05:00",
+  "pnl": -497.8992829241082
  },
  "sent": [
   "bot_online",
   "gold_setup",
   "gold_fill",
   "nas_pre",
-  "nas_signal"
+  "nas_signal",
+  "nas_exit"
  ],
  "nas_pred": -1
 }
