@@ -46,7 +46,8 @@
   "nas_pre",
   "nas_signal",
   "nas_exit",
-  "gold_exit"
+  "gold_exit",
+  "summary"
  ],
  "nas_pred": -1
 }
