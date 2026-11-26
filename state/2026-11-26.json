@@ -1,6 +1,6 @@
 {
  "gold": {
-  "status": "pending",
+  "status": "short",
   "legs": {
    "long": {
     "entry": 3607.75,
@@ -21,7 +21,7 @@
     "t": 85.36728
    }
   },
-  "checked": "2026-11-26T05:36:00-05:00",
+  "checked": "2026-11-26T05:42:00-05:00",
   "alerted": [
    "short"
   ],
@@ -31,6 +31,7 @@
  "sent": [
   "bot_online",
   "gold_setup",
-  "gold_pre_short"
+  "gold_pre_short",
+  "gold_fill"
  ]
 }
