@@ -21,13 +21,16 @@
     "t": 85.36728
    }
   },
-  "checked": "2026-11-26T05:09:00-05:00",
-  "alerted": [],
+  "checked": "2026-11-26T05:19:00-05:00",
+  "alerted": [
+   "short"
+  ],
   "atr": 119.14289202008929
  },
  "nas": {},
  "sent": [
   "bot_online",
-  "gold_setup"
+  "gold_setup",
+  "gold_pre_short"
  ]
 }
