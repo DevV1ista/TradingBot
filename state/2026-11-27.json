@@ -1,7 +1,10 @@
 {
- "gold": {},
+ "gold": {
+  "status": "off"
+ },
  "nas": {},
  "sent": [
-  "bot_online"
+  "bot_online",
+  "gold_none"
  ]
 }
