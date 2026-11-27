@@ -2,9 +2,23 @@
  "gold": {
   "status": "off"
  },
- "nas": {},
+ "nas": {
+  "side": -1,
+  "entry": 26328.78779661829,
+  "sl": 26564.78633177454,
+  "tp": 25620.79219114954,
+  "r": 235.99853515625,
+  "t": 707.99560546875,
+  "n": 2.11,
+  "upp": 2.11,
+  "status": "open",
+  "checked": "2026-11-27T09:38:00-05:00"
+ },
  "sent": [
   "bot_online",
-  "gold_none"
- ]
+  "gold_none",
+  "nas_pre",
+  "nas_signal"
+ ],
+ "nas_pred": -1
 }
